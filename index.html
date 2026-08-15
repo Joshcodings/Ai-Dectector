@@ -1283,31 +1283,29 @@
     return $('api-url').value.replace(/\/$/, '');
   }
 
-  /* ══════════════════════════════════════════════════════════════
-     CONNECTION TEST
+    /* ══════════════════════════════════════════════════════════════
+     LOCAL ONNX MODEL LOADER
   ══════════════════════════════════════════════════════════════ */
-  async function testConnection() {
+  async function loadModel() {
     const pill = $('status-pill');
     const text = $('status-text');
-    const btn  = $('btn-connect');
 
     pill.className = 'status-pill';
-    text.textContent = 'Connecting…';
-    btn.disabled = true;
+    text.textContent = 'Loading model…';
 
     try {
-      const res = await fetch(`${apiBase()}/health`, { signal: AbortSignal.timeout(5000) });
-      if (res.ok) {
-        pill.classList.add('connected');
-        text.textContent = 'Connected';
-      } else {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      // Configure ONNX Runtime for compatibility inside sandboxed iframes
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.proxy = false;
+
+      // Load ONNX session from relative path
+      session = await ort.InferenceSession.create('best_model.onnx');
+      pill.classList.add('connected');
+      text.textContent = 'Model Active';
     } catch (e) {
+      console.error(e);
       pill.classList.add('error');
-      text.textContent = 'Unreachable';
-    } finally {
-      btn.disabled = false;
+      text.textContent = 'Model Load Error';
     }
   }
 
