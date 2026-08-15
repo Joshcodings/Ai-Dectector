@@ -1,3 +1,12 @@
+---
+title: Ai Image Detector
+emoji: 🔍
+colorFrom: yellow
+colorTo: gray
+sdk: static
+pinned: false
+---
+
 # AI Image Detector
 
 A full-stack AI image authenticity detector — upload any image and the trained CNN model instantly predicts whether it was AI-generated or a real photograph.
