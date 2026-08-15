@@ -1,0 +1,11 @@
+train/
+test/
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+*.bak
+.venv/
+venv/
+node_modules/
+.DS_Store
+best_model.keras

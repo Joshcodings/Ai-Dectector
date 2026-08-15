@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Image Detector — Real or Fake?</title>
+  <meta name="description" content="Upload any image and our deep learning model will instantly tell you whether it was AI-generated or captured in reality." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════════════════════ */
+    :root {
+      --bg-base:       #f5f2eb; /* Milky beige base */
+      --bg-surface:    #ffffff; /* Clean white cards for contrast */
+      --bg-elevated:   #faf9f6; 
+      --bg-card:       #fcfbfa;
+
+      --border:        #e2ddd5; /* Soft beige borders */
+      --border-subtle: #eeeae2;
+
+      --text-primary:  #1d1a16; /* Deep warm charcoal */
+      --text-secondary:#5c564c; /* Slate warm gray */
+      --text-muted:    #8f877c;
+
+      --cyan:          #2563eb; /* High-contrast professional royal blue */
+      --cyan-dim:      #1d4ed8;
+      --cyan-glow:     rgba(37, 99, 235, 0.06);
+
+      --green:         #16a34a; /* Muted professional green */
+      --green-glow:    rgba(22, 163, 74, 0.06);
+
+      --red:           #dc2626; /* Muted professional red */
+      --red-glow:      rgba(220, 38, 38, 0.06);
+
+      --amber:         #ca8a04;
+
+      --radius-sm:     8px;
+      --radius:        14px;
+      --radius-lg:     20px;
+      --radius-xl:     28px;
+
+      --shadow-card:   0 4px 20px rgba(29, 26, 22, 0.05), 0 1px 3px rgba(29, 26, 22, 0.03);
+      --shadow-glow-cyan: 0 0 30px rgba(37, 99, 235, 0.05);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESET & BASE
+    ═══════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* ── Noise texture overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.15; /* Subtle noise on light background */
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       LAYOUT
+    ═══════════════════════════════════════════════════════ */
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ── Background radial glow ── */
+    .bg-glow {
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px;
+      height: 600px;
+      background: radial-gradient(ellipse, hsla(36, 60%, 50%, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       NAV / HEADER
+    ═══════════════════════════════════════════════════════ */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px 0 0;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--text-primary);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(29, 26, 22, 0.08);
+    }
+
+    .logo-text {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+
+    .logo-sub {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.3s;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s;
+    }
+
+    .status-pill.connected .status-dot {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    .status-pill.error .status-dot {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       HERO SECTION
+    ═══════════════════════════════════════════════════════ */
+    .hero {
+      text-align: center;
+      padding: 64px 0 48px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: hsla(185,90%,55%,0.08);
+      border: 1px solid hsla(185,90%,55%,0.25);
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      padding: 6px 16px;
+      border-radius: 100px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 18px;
+      color: var(--text-primary);
+    }
+
+    .hero h1 span {
+      color: var(--cyan);
+    }
+
+    .hero p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.75;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       BACKEND CONFIG
+    ═══════════════════════════════════════════════════════ */
+    .config-section {
+      margin-bottom: 28px;
+    }
+
+    .config-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .config-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .config-input-wrap {
+      flex: 1;
+      min-width: 200px;
+      position: relative;
+    }
+
+    .config-input {
+      width: 100%;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .config-input:focus {
+      border-color: var(--cyan-dim);
+      box-shadow: 0 0 0 3px var(--cyan-glow);
+    }
+
+    .btn-connect {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-connect:hover {
+      border-color: var(--cyan-dim);
+      color: var(--cyan);
+      box-shadow: 0 0 0 3px var(--cyan-glow);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       UPLOAD ZONE
+    ═══════════════════════════════════════════════════════ */
+    .upload-zone {
+      background: var(--bg-surface);
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-xl);
+      padding: 60px 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+      min-height: 300px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .upload-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, var(--cyan-glow) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+      border-color: var(--cyan-dim);
+      background: var(--bg-elevated);
+    }
+
+    .upload-zone:hover::before,
+    .upload-zone.drag-over::before {
+      opacity: 1;
+    }
+
+    .upload-zone.drag-over {
+      border-style: solid;
+      border-color: var(--cyan);
+      box-shadow: var(--shadow-glow-cyan), inset 0 0 60px var(--cyan-glow);
+    }
+
+    .upload-icon {
+      width: 72px;
+      height: 72px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--cyan);
+      transition: all 0.3s;
+      position: relative;
+      z-index: 1;
+    }
+
+    .upload-zone:hover .upload-icon,
+    .upload-zone.drag-over .upload-icon {
+      background: var(--bg-card);
+      border-color: var(--cyan-dim);
+      box-shadow: 0 0 24px var(--cyan-glow);
+      transform: translateY(-4px);
+    }
+
+    .upload-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      position: relative;
+      z-index: 1;
+    }
+
+    .upload-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      position: relative;
+      z-index: 1;
+    }
+
+    .upload-formats {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .fmt-pill {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 100px;
+    }
+
+    #file-input { display: none; }
+
+    /* ═══════════════════════════════════════════════════════
+       PREVIEW + ANALYSE CARD
+    ═══════════════════════════════════════════════════════ */
+    .preview-section {
+      display: none;
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .preview-section.visible { display: flex; flex-wrap: wrap; }
+
+    .preview-card {
+      flex: 1;
+      min-width: 240px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .preview-img-wrap {
+      width: 100%;
+      aspect-ratio: 1;
+      overflow: hidden;
+      background: var(--bg-elevated);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #preview-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.4s ease;
+    }
+
+    .preview-card:hover #preview-img { transform: scale(1.03); }
+
+    .preview-meta {
+      padding: 16px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .preview-filename {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+
+    .preview-filesize {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .change-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: hsla(222,20%,8%,0.85);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .change-btn:hover {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border-color: var(--cyan-dim);
+    }
+
+    /* ── Analyse button panel ── */
+    .analyse-panel {
+      flex: 1;
+      min-width: 240px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .analyse-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .analyse-hint {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.65;
+    }
+
+    .analyse-checklist {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .analyse-checklist li {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .analyse-checklist li i {
+      color: var(--cyan);
+      flex-shrink: 0;
+    }
+
+    .btn-analyse {
+      width: 100%;
+      background: linear-gradient(135deg, var(--cyan), hsl(195,80%,42%));
+      color: hsl(222,24%,7%);
+      border: none;
+      padding: 16px;
+      border-radius: var(--radius);
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: -0.3px;
+      transition: all 0.25s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 24px hsla(185,90%,55%,0.3);
+    }
+
+    .btn-analyse:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 36px hsla(185,90%,55%,0.45);
+    }
+
+    .btn-analyse:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-analyse:disabled {
+      opacity: 0.15; /* Subtle noise on light background */
+      cursor: not-allowed;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       LOADING STATE
+    ═══════════════════════════════════════════════════════ */
+    .loading-section {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding: 48px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      margin-top: 24px;
+      text-align: center;
+    }
+
+    .loading-section.visible { display: flex; }
+
+    .scanner {
+      position: relative;
+      width: 88px;
+      height: 88px;
+    }
+
+    .scanner-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--cyan);
+      animation: spin 0.9s linear infinite;
+    }
+
+    .scanner-ring:nth-child(2) {
+      inset: 10px;
+      border-top-color: transparent;
+      border-right-color: var(--cyan-dim);
+      animation-duration: 1.4s;
+      animation-direction: reverse;
+    }
+
+    .scanner-core {
+      position: absolute;
+      inset: 22px;
+      background: var(--bg-elevated);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--cyan);
+      animation: scanner-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes scanner-pulse {
+      0%, 100% { transform: scale(1); }
+      50%       { transform: scale(1.12); }
+    }
+
+    .loading-text {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .loading-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESULT CARD
+    ═══════════════════════════════════════════════════════ */
+    .result-section {
+      display: none;
+      margin-top: 24px;
+      gap: 20px;
+      flex-direction: column;
+    }
+
+    .result-section.visible { display: flex; }
+
+    .result-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      animation: slide-up 0.5s cubic-bezier(.16,1,.3,1);
+    }
+
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-header {
+      padding: 32px 36px 28px;
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .result-verdict-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .verdict-fake .result-verdict-icon {
+      background: var(--red-glow);
+      border: 1px solid hsla(355,85%,62%,0.3);
+      color: var(--red);
+    }
+
+    .verdict-real .result-verdict-icon {
+      background: var(--green-glow);
+      border: 1px solid hsla(145,75%,52%,0.3);
+      color: var(--green);
+    }
+
+    .result-text { flex: 1; }
+
+    .result-verdict-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .result-verdict-name {
+      font-size: clamp(2rem, 5vw, 2.8rem);
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .verdict-fake .result-verdict-name { color: var(--red); }
+    .verdict-real .result-verdict-name { color: var(--green); }
+
+    .result-verdict-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      max-width: 440px;
+    }
+
+    /* ── Confidence bar ── */
+    .confidence-section {
+      padding: 0 36px 32px;
+    }
+
+    .conf-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .conf-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .conf-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .conf-bar-bg {
+      height: 10px;
+      background: var(--bg-elevated);
+      border-radius: 100px;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .conf-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      width: 0;
+      transition: width 1.2s cubic-bezier(.16,1,.3,1);
+    }
+
+    .verdict-fake .conf-bar-fill {
+      background: linear-gradient(90deg, hsl(355,85%,42%), var(--red));
+      box-shadow: 0 0 12px var(--red-glow);
+    }
+
+    .verdict-real .conf-bar-fill {
+      background: linear-gradient(90deg, hsl(145,75%,35%), var(--green));
+      box-shadow: 0 0 12px var(--green-glow);
+    }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display: flex;
+      border-top: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      flex: 1;
+      min-width: 120px;
+      padding: 20px 28px;
+      border-right: 1px solid var(--border-subtle);
+    }
+
+    .stat-item:last-child { border-right: none; }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* ── Risk meter ── */
+    .risk-row {
+      padding: 20px 36px 24px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .risk-label-group { flex: 1; min-width: 160px; }
+
+    .risk-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .risk-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .risk-badge {
+      padding: 6px 18px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .risk-low    { background: hsla(145,75%,52%,0.12); color: var(--green);  border: 1px solid hsla(145,75%,52%,0.25); }
+    .risk-medium { background: hsla(38,95%,62%,0.12);  color: var(--amber); border: 1px solid hsla(38,95%,62%,0.25); }
+    .risk-high   { background: hsla(355,85%,62%,0.12); color: var(--red);   border: 1px solid hsla(355,85%,62%,0.25); }
+
+    /* ── Actions ── */
+    .actions-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-secondary {
+      flex: 1;
+      min-width: 140px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border-color: var(--cyan-dim);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       ERROR STATE
+    ═══════════════════════════════════════════════════════ */
+    .error-card {
+      display: none;
+      background: hsla(355,85%,62%,0.06);
+      border: 1px solid hsla(355,85%,62%,0.25);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      margin-top: 20px;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .error-card.visible { display: flex; }
+
+    .error-icon {
+      color: var(--red);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .error-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--red);
+      margin-bottom: 4px;
+    }
+
+    .error-msg {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       HISTORY SECTION
+    ═══════════════════════════════════════════════════════ */
+    .history-section {
+      margin-top: 48px;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+    }
+
+    .clear-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .clear-btn:hover { color: var(--red); }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .history-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: slide-up 0.3s ease;
+    }
+
+    .hist-thumb {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .hist-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hist-verdict {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 100px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      flex-shrink: 0;
+    }
+
+    .hist-verdict.fake { background: var(--red-glow);   color: var(--red);   border: 1px solid hsla(355,85%,62%,0.3); }
+    .hist-verdict.real { background: var(--green-glow); color: var(--green); border: 1px solid hsla(145,75%,52%,0.3); }
+
+    .hist-conf {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      min-width: 50px;
+      text-align: right;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════════════ */
+    footer {
+      margin-top: 64px;
+      padding: 24px 0;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .footer-text {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .footer-mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════════════ */
+    @media (max-width: 600px) {
+      .wrapper { padding: 0 16px 60px; }
+      .hero { padding: 40px 0 32px; }
+      .result-header { padding: 24px; }
+      .confidence-section { padding: 0 24px 24px; }
+      .stats-row { flex-direction: column; }
+      .stat-item { border-right: none; border-bottom: 1px solid var(--border-subtle); }
+      .stat-item:last-child { border-bottom: none; }
+      .risk-row { padding: 16px 24px 20px; }
+    }
+  </style>
+
+  <!-- ONNX Runtime Web -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+
+<div class="bg-glow"></div>
+
+<div class="wrapper">
+
+  <!-- ── Header ──────────────────────────────────────────────── -->
+  <header>
+    <a href="#" class="logo">
+      <div class="logo-icon">
+        <i data-lucide="scan-search" size="20"></i>
+      </div>
+      <div>
+        <div class="logo-text">AI Image Detector</div>
+        <div class="logo-sub">Deep Learning · v1.0</div>
+      </div>
+    </a>
+    <div class="status-pill" id="status-pill">
+      <div class="status-dot"></div>
+      <span id="status-text">Not connected</span>
+    </div>
+  </header>
+
+  <!-- ── Hero ────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-badge">
+      <i data-lucide="zap" size="14"></i> Powered by Your Trained Model
+    </div>
+    <h1>Is this image <span>Real</span> or<br><span style="color:var(--red)">AI-Generated?</span></h1>
+    <p>Upload any image and our deep learning model will analyse its pixel patterns to determine whether it was captured by a camera — or synthesised by artificial intelligence.</p>
+  </section>
+
+
+
+  <!-- ── Upload zone ──────────────────────────────────────────── -->
+  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+    <div class="upload-icon">
+      <i data-lucide="upload-cloud" size="34"></i>
+    </div>
+    <div class="upload-title">Drop your image here</div>
+    <div class="upload-sub">or click to browse your files</div>
+    <div class="upload-formats">
+      <span class="fmt-pill">JPG</span>
+      <span class="fmt-pill">PNG</span>
+      <span class="fmt-pill">WEBP</span>
+      <span class="fmt-pill">BMP</span>
+      <span class="fmt-pill">GIF</span>
+    </div>
+    <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)" />
+  </div>
+
+  <!-- ── Preview + analyse panel ─────────────────────────────── -->
+  <div class="preview-section" id="preview-section">
+    <div class="preview-card">
+      <div class="preview-img-wrap">
+        <img id="preview-img" src="" alt="Image preview" />
+      </div>
+      <div class="preview-meta">
+        <div class="preview-filename" id="preview-filename">—</div>
+        <div class="preview-filesize" id="preview-filesize">—</div>
+      </div>
+      <button class="change-btn" onclick="reset()">
+        <i data-lucide="rotate-ccw" size="13"></i> Change
+      </button>
+    </div>
+
+    <div class="analyse-panel">
+      <div class="analyse-panel-top">
+        <div class="analyse-label">Ready to analyse</div>
+        <div class="analyse-hint">Your image will be sent to the AI detection model. The model was trained to identify subtle pixel-level patterns that distinguish real photographs from AI-generated content.</div>
+        <ul class="analyse-checklist">
+          <li><i data-lucide="check-circle-2" size="15"></i> 32 × 32 pixel pattern analysis</li>
+          <li><i data-lucide="check-circle-2" size="15"></i> Convolutional neural network inference</li>
+          <li><i data-lucide="check-circle-2" size="15"></i> Returns confidence score (0–100%)</li>
+          <li><i data-lucide="check-circle-2" size="15"></i> Results in under 1 second</li>
+        </ul>
+      </div>
+      <button class="btn-analyse" id="btn-analyse" onclick="analyse()">
+        <span id="btn-icon"><i data-lucide="cpu" size="18"></i></span>
+        <span id="btn-label">Analyse Image</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Loading ──────────────────────────────────────────────── -->
+  <div class="loading-section" id="loading-section">
+    <div class="scanner">
+      <div class="scanner-ring"></div>
+      <div class="scanner-ring"></div>
+      <div class="scanner-core">
+        <i data-lucide="brain-circuit" size="24"></i>
+      </div>
+    </div>
+    <div class="loading-text">Analysing image…</div>
+    <div class="loading-sub" id="loading-status">Sending to model</div>
+  </div>
+
+  <!-- ── Error card ───────────────────────────────────────────── -->
+  <div class="error-card" id="error-card">
+    <div class="error-icon">
+      <i data-lucide="alert-triangle" size="22"></i>
+    </div>
+    <div class="error-content">
+      <div class="error-title">Prediction failed</div>
+      <div class="error-msg" id="error-msg">Unknown error.</div>
+    </div>
+  </div>
+
+  <!-- ── Result card ──────────────────────────────────────────── -->
+  <div class="result-section" id="result-section">
+
+    <div class="result-card" id="result-card">
+
+      <div class="result-header">
+        <div class="result-verdict-icon" id="result-icon">
+          <i data-lucide="bot" size="36"></i>
+        </div>
+        <div class="result-text">
+          <div class="result-verdict-label">Model Verdict</div>
+          <div class="result-verdict-name" id="result-name">—</div>
+          <div class="result-verdict-desc" id="result-desc">—</div>
+        </div>
+      </div>
+
+      <div class="confidence-section">
+        <div class="conf-header">
+          <div class="conf-label">Confidence</div>
+          <div class="conf-value" id="conf-value">0%</div>
+        </div>
+        <div class="conf-bar-bg">
+          <div class="conf-bar-fill" id="conf-bar"></div>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-label">Raw Score</div>
+          <div class="stat-value" id="stat-raw">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Threshold</div>
+          <div class="stat-value">0.5000</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Class</div>
+          <div class="stat-value" id="stat-class">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Input Size</div>
+          <div class="stat-value">32 × 32</div>
+        </div>
+      </div>
+
+      <div class="risk-row">
+        <div class="risk-label-group">
+          <div class="risk-title">Risk Assessment</div>
+          <div class="risk-desc" id="risk-desc">Based on confidence score.</div>
+        </div>
+        <span class="risk-badge" id="risk-badge">—</span>
+      </div>
+
+    </div>
+
+    <!-- Actions -->
+    <div class="actions-row">
+      <button class="btn-secondary" onclick="reset()">
+        <i data-lucide="refresh-cw" size="15"></i> Test Another Image
+      </button>
+      <button class="btn-secondary" onclick="copyResult()">
+        <i data-lucide="copy" size="15"></i> Copy Result
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ── History ───────────────────────────────────────────────── -->
+  <div class="history-section" id="history-section" style="display:none">
+    <div class="section-heading">
+      <div class="section-title">Recent Analyses</div>
+      <button class="clear-btn" onclick="clearHistory()">Clear all</button>
+    </div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+
+  <!-- ── Footer ───────────────────────────────────────────────── -->
+  <footer>
+    <div class="footer-text">AI Image Detector — Powered by your trained CNN model</div>
+    <div class="footer-mono" id="req-count">0 requests made</div>
+  </footer>
+
+</div><!-- /.wrapper -->
+
+
+<script>
+  /* ══════════════════════════════════════════════════════════════
+     STATE & INITIALIZATION
+  ══════════════════════════════════════════════════════════════ */
+  let currentFile = null;
+  let lastResult  = null;
+  let history     = [];
+  let reqCount    = 0;
+  let session     = null; // ONNX Session
+
+  const $ = id => document.getElementById(id);
+
+  function refreshIcons() {
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+  }
+
+  function show(id)  { $(id).classList.add('visible'); }
+  function hide(id)  { $(id).classList.remove('visible'); }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  function apiBase() {
+    return $('api-url').value.replace(/\/$/, '');
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     CONNECTION TEST
+  ══════════════════════════════════════════════════════════════ */
+  async function testConnection() {
+    const pill = $('status-pill');
+    const text = $('status-text');
+    const btn  = $('btn-connect');
+
+    pill.className = 'status-pill';
+    text.textContent = 'Connecting…';
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${apiBase()}/health`, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        pill.classList.add('connected');
+        text.textContent = 'Connected';
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
+    } catch (e) {
+      pill.classList.add('error');
+      text.textContent = 'Unreachable';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     FILE HANDLING
+  ══════════════════════════════════════════════════════════════ */
+  function handleFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    loadFile(file);
+  }
+
+  function loadFile(file) {
+    if (!file.type.startsWith('image/')) {
+      showError('Please select a valid image file.');
+      return;
+    }
+    currentFile = file;
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      $('preview-img').src     = e.target.result;
+      $('preview-filename').textContent = file.name;
+      $('preview-filesize').textContent = formatBytes(file.size) + ' · ' + file.type;
+    };
+    reader.readAsDataURL(file);
+
+    // Show preview, hide results
+    $('upload-zone').style.display = 'none';
+    show('preview-section');
+    hide('result-section');
+    hide('loading-section');
+    hide('error-card');
+    refreshIcons();
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     DRAG AND DROP
+  ══════════════════════════════════════════════════════════════ */
+  const zone = $('upload-zone');
+
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('drag-over');
+  });
+
+  zone.addEventListener('dragleave', e => {
+    if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+  });
+
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) loadFile(file);
+  });
+
+  /* ══════════════════════════════════════════════════════════════
+     ANALYSE
+  ══════════════════════════════════════════════════════════════ */
+  async function analyse() {
+    if (!currentFile) return;
+    if (!session) {
+      showError('Please wait, the model is still loading.');
+      return;
+    }
+
+    // Loading state
+    hide('preview-section');
+    hide('result-section');
+    hide('error-card');
+    show('loading-section');
+
+    const steps = ['Reading image…', 'Resizing pixels…', 'Running WASM inference…'];
+    let si = 0;
+    const ticker = setInterval(() => {
+      $('loading-status').textContent = steps[si++ % steps.length];
+    }, 700);
+
+    try {
+      // 1. Load image into HTML Image object
+      const img = new Image();
+      const imgLoaded = new Promise((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load image for local processing.'));
+        img.src = $('preview-img').src;
+      });
+      await imgLoaded;
+
+      // 2. Resize to 32x32 using HTML5 Canvas with Nearest-Neighbor
+      const canvas = document.createElement('canvas');
+      canvas.width = 32;
+      canvas.height = 32;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false; // Nearest-Neighbor scaling
+      ctx.drawImage(img, 0, 0, 32, 32);
+
+      // 3. Extract RGB channels
+      const imgData = ctx.getImageData(0, 0, 32, 32);
+      const pixels = imgData.data; // RGBA [0-255]
+
+      // 4. Pack into Float32Array shape [1, 32, 32, 3]
+      const floatData = new Float32Array(32 * 32 * 3);
+      let idx = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        floatData[idx++] = pixels[i];     // Red
+        floatData[idx++] = pixels[i + 1]; // Green
+        floatData[idx++] = pixels[i + 2]; // Blue
+      }
+
+      // 5. Create ORT Tensor and run inference
+      const inputName = session.inputNames[0];
+      const inputTensor = new ort.Tensor('float32', floatData, [1, 32, 32, 3]);
+
+      const feeds = {};
+      feeds[inputName] = inputTensor;
+      const results = await session.run(feeds);
+
+      // 6. Extract predictions
+      const outputName = session.outputNames[0];
+      const outputTensor = results[outputName];
+      const raw_score = outputTensor.data[0];
+
+      clearInterval(ticker);
+
+      reqCount++;
+      $('req-count').textContent = reqCount + (reqCount === 1 ? ' analysis' : ' analyses') + ' made';
+
+      const prediction = raw_score >= 0.5 ? 'FAKE' : 'REAL';
+      const confidence = prediction === 'FAKE' ? raw_score : 1.0 - raw_score;
+
+      const data = {
+        prediction: prediction,
+        confidence: confidence,
+        raw_score: raw_score
+      };
+
+      lastResult = data;
+      renderResult(data);
+      addToHistory(currentFile, data);
+
+    } catch (e) {
+      clearInterval(ticker);
+      showError(e.message);
+    } finally {
+      hide('loading-section');
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     RENDER RESULT
+  ═══════════════════════════════════════════════════════ */
+  function renderResult(data) {
+    const isFake = data.prediction === 'FAKE';
+    const conf   = Math.round(data.confidence * 100);
+    const card   = $('result-card');
+
+    // Verdict class
+    card.className = 'result-card ' + (isFake ? 'verdict-fake' : 'verdict-real');
+
+    // Icon & text
+    $('result-icon').innerHTML = isFake 
+      ? '<i data-lucide="bot" size="36"></i>' 
+      : '<i data-lucide="camera" size="36"></i>';
+      
+    $('result-name').textContent = isFake ? 'AI-Generated' : 'Real Photo';
+    $('result-desc').textContent = isFake
+      ? 'Our model detected patterns consistent with AI image generation. This image was likely synthesised by a generative AI model such as a GAN or diffusion model.'
+      : 'Our model found no significant patterns associated with AI generation. This image appears to be an authentic photograph taken with a real camera.';
+
+    // Confidence bar
+    $('conf-value').textContent = conf + '%';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        $('conf-bar').style.width = conf + '%';
+      });
+    });
+
+    // Stats
+    $('stat-raw').textContent   = data.raw_score.toFixed(4);
+    $('stat-class').textContent = data.prediction;
+
+    // Risk badge
+    const riskBadge = $('risk-badge');
+    const riskDesc  = $('risk-desc');
+    if (conf >= 85) {
+      riskBadge.className     = 'risk-badge risk-high';
+      riskBadge.textContent   = isFake ? 'High — Likely AI' : 'High — Likely Real';
+      riskDesc.textContent    = 'Model is highly confident in this prediction.';
+    } else if (conf >= 60) {
+      riskBadge.className     = 'risk-badge risk-medium';
+      riskBadge.textContent   = 'Medium Confidence';
+      riskDesc.textContent    = 'Moderately confident — consider additional verification.';
+    } else {
+      riskBadge.className     = 'risk-badge risk-low';
+      riskBadge.textContent   = 'Low Confidence';
+      riskDesc.textContent    = 'Uncertain prediction — the image may be ambiguous.';
+    }
+
+    show('result-section');
+    refreshIcons();
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     ERROR
+  ══════════════════════════════════════════════════════════════ */
+  function showError(msg) {
+    hide('loading-section');
+    show('preview-section');
+    $('error-msg').textContent = msg;
+    show('error-card');
+    refreshIcons();
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     HISTORY
+  ══════════════════════════════════════════════════════════════ */
+  function addToHistory(file, data) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      history.unshift({ thumb: e.target.result, name: file.name, data });
+      renderHistory();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderHistory() {
+    const list = $('history-list');
+    $('history-section').style.display = 'block';
+    list.innerHTML = '';
+
+    history.slice(0, 8).forEach(item => {
+      const conf = Math.round(item.data.confidence * 100);
+      const isFake = item.data.prediction === 'FAKE';
+
+      const el = document.createElement('div');
+      el.className = 'history-item';
+      el.innerHTML = `
+        <img class="hist-thumb" src="${item.thumb}" alt="thumb" />
+        <div class="hist-name">${item.name}</div>
+        <span class="hist-verdict ${isFake ? 'fake' : 'real'}">${item.data.prediction}</span>
+        <div class="hist-conf">${conf}%</div>
+      `;
+      list.appendChild(el);
+    });
+  }
+
+  function clearHistory() {
+    history = [];
+    $('history-section').style.display = 'none';
+    $('history-list').innerHTML = '';
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     RESET
+  ══════════════════════════════════════════════════════════════ */
+  function reset() {
+    currentFile = null;
+    $('file-input').value = '';
+    $('upload-zone').style.display = '';
+    hide('preview-section');
+    hide('result-section');
+    hide('loading-section');
+    hide('error-card');
+    refreshIcons();
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     COPY RESULT
+  ══════════════════════════════════════════════════════════════ */
+  async function copyResult() {
+    if (!lastResult) return;
+    const text = `AI Image Detector Result
+━━━━━━━━━━━━━━━━━━━━━━━━
+Prediction : ${lastResult.prediction}
+Confidence : ${Math.round(lastResult.confidence * 100)}%
+Raw Score  : ${lastResult.raw_score}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* clipboard not available in all contexts */
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     INIT — auto-ping & icons on load
+  ══════════════════════════════════════════════════════════════ */
+  window.addEventListener('DOMContentLoaded', () => {
+    refreshIcons();
+    loadModel();
+  });
+</script>
+</body>
+</html>
