@@ -63,7 +63,7 @@ async def predict(file: UploadFile = File(...)):
         image = (
             Image.open(io.BytesIO(image_bytes))
             .convert("RGB")
-            .resize(IMG_SIZE, Image.Resampling.NEAREST)
+            .resize(IMG_SIZE, Image.Resampling.BILINEAR)
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not read image: {exc}")

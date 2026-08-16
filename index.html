@@ -1521,7 +1521,8 @@
       canvas.width = 32;
       canvas.height = 32;
       const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = false; // Nearest-Neighbor scaling
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, 32, 32);
 
       // 3. Extract RGB channels
