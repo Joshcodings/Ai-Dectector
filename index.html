@@ -521,6 +521,70 @@
       line-height: 1.65;
     }
 
+    /* ── Threshold adjustment slider ── */
+    .threshold-panel {
+      margin-top: 16px;
+      margin-bottom: 16px;
+      padding: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+
+    .threshold-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .threshold-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .threshold-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    .threshold-slider {
+      width: 100%;
+      -webkit-appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      outline: none;
+      transition: background 0.15s ease-in-out;
+    }
+
+    .threshold-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--cyan);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .threshold-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    .threshold-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
     .analyse-checklist {
       list-style: none;
       display: flex;
@@ -1129,6 +1193,17 @@
       <div class="analyse-panel-top">
         <div class="analyse-label">Ready to analyse</div>
         <div class="analyse-hint">Your image will be sent to the AI detection model. The model was trained to identify subtle pixel-level patterns that distinguish real photographs from AI-generated content.</div>
+        
+        <!-- Threshold Calibration Slider -->
+        <div class="threshold-panel">
+          <div class="threshold-header">
+            <span class="threshold-label">Sensitivity Threshold</span>
+            <span class="threshold-val" id="threshold-val">50%</span>
+          </div>
+          <input type="range" id="threshold-range" min="5" max="95" value="50" class="threshold-slider" oninput="updateThreshold(this.value)" />
+          <div class="threshold-desc">Decision boundary. Raise this value if your real camera photos are flagged as AI (reduces false positives).</div>
+        </div>
+
         <ul class="analyse-checklist">
           <li><i data-lucide="check-circle-2" size="15"></i> 32 × 32 pixel pattern analysis</li>
           <li><i data-lucide="check-circle-2" size="15"></i> Convolutional neural network inference</li>
@@ -1193,6 +1268,16 @@
         </div>
       </div>
 
+      <!-- Sensitivity Calibration Slider inside Result Card -->
+      <div class="threshold-panel" style="margin-top: 24px; background: var(--bg-surface);">
+        <div class="threshold-header">
+          <span class="threshold-label">Real-time Sensitivity Calibration</span>
+          <span class="threshold-val" id="threshold-val-res">50%</span>
+        </div>
+        <input type="range" id="threshold-range-res" min="5" max="95" value="50" class="threshold-slider" oninput="updateThreshold(this.value)" />
+        <div class="threshold-desc">Adjusting the decision boundary. The CIFAKE dataset contains low-quality 2009-era photos as REAL. Modern camera photos are higher quality, so raising the threshold to 75%-85% helps correctly identify them as REAL.</div>
+      </div>
+
       <div class="stats-row">
         <div class="stat-item">
           <div class="stat-label">Raw Score</div>
@@ -1200,7 +1285,7 @@
         </div>
         <div class="stat-item">
           <div class="stat-label">Threshold</div>
-          <div class="stat-value">0.5000</div>
+          <div class="stat-value" id="stat-threshold">0.5000</div>
         </div>
         <div class="stat-item">
           <div class="stat-label">Class</div>
@@ -1261,6 +1346,7 @@
   let history     = [];
   let reqCount    = 0;
   let session     = null; // ONNX Session
+  let threshold   = 0.50; // Decision threshold
 
   const $ = id => document.getElementById(id);
 
@@ -1286,6 +1372,39 @@
     /* ══════════════════════════════════════════════════════════════
      LOCAL ONNX MODEL LOADER
   ══════════════════════════════════════════════════════════════ */
+  function updateThreshold(val) {
+    threshold = val / 100;
+    
+    // Synchronize both sliders
+    const slider1 = $('threshold-range');
+    const slider2 = $('threshold-range-res');
+    if (slider1) slider1.value = val;
+    if (slider2) slider2.value = val;
+
+    // Synchronize labels
+    const label1 = $('threshold-val');
+    const label2 = $('threshold-val-res');
+    if (label1) label1.textContent = val + '%';
+    if (label2) label2.textContent = val + '%';
+
+    // Synchronize threshold stat
+    const statThresh = $('stat-threshold');
+    if (statThresh) statThresh.textContent = (val / 100).toFixed(4);
+
+    if (lastResult) {
+      const raw_score = lastResult.raw_score;
+      const prediction = raw_score >= threshold ? 'FAKE' : 'REAL';
+      const confidence = prediction === 'FAKE' ? raw_score : 1.0 - raw_score;
+
+      const data = {
+        prediction: prediction,
+        confidence: confidence,
+        raw_score: raw_score
+      };
+      renderResult(data);
+    }
+  }
+
   async function loadModel() {
     const pill = $('status-pill');
     const text = $('status-text');
@@ -1436,7 +1555,7 @@
       reqCount++;
       $('req-count').textContent = reqCount + (reqCount === 1 ? ' analysis' : ' analyses') + ' made';
 
-      const prediction = raw_score >= 0.5 ? 'FAKE' : 'REAL';
+      const prediction = raw_score >= threshold ? 'FAKE' : 'REAL';
       const confidence = prediction === 'FAKE' ? raw_score : 1.0 - raw_score;
 
       const data = {
